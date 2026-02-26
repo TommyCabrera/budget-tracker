@@ -1,5 +1,7 @@
 # 💰 Budget Tracker
 
+**Live app: https://budget-tracker-two-gamma.vercel.app**
+
 A personal budget tracker app you can use right from your phone or browser — no downloads needed. Track your income, monthly bills, credit cards, and everyday expenses all in one place.
 
 ---
@@ -71,13 +73,13 @@ At the top of the screen you'll see the current month. Tap **+ New Month** to st
 This app can be installed on your phone's home screen like a regular app — no App Store needed.
 
 **On iPhone (Safari):**
-1. Open the app link in Safari
+1. Open **https://budget-tracker-two-gamma.vercel.app** in Safari
 2. Tap the **Share** button (the square with an arrow pointing up)
 3. Scroll down and tap **"Add to Home Screen"**
 4. Tap **Add**
 
 **On Android (Chrome):**
-1. Open the app link in Chrome
+1. Open **https://budget-tracker-two-gamma.vercel.app** in Chrome
 2. Tap the **three dots** menu in the top right
 3. Tap **"Add to Home Screen"** or **"Install App"**
 4. Tap **Install**
