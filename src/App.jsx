@@ -14,6 +14,9 @@ const DEFAULT_PAYMENT_METHODS = ["Salary","Credit Card"];
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 const PIN_KEY = "bt_pin_hash";
 const BIO_KEY = "bt_bio_enabled";
+const DATA_KEY = "bt_all_months";
+const SETTINGS_KEY = "bt_settings";
+const MONTH_KEY = "bt_current_month";
 
 const today = () => new Date().toISOString().slice(0,10);
 const fmt = n => `₱${Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
@@ -550,9 +553,24 @@ function NewMonthModal({existingMonths,onClose,onCreate}){
 // ══════════════════════════════════════
 export default function App(){
   const [unlocked,setUnlocked]=useState(false);
-  const [settings,setSettings]=useState(INIT_SETTINGS);
-  const [allMonths,setAllMonths]=useState(INIT_MONTHS);
-  const [currentMonth,setCurrentMonth]=useState(Object.keys(INIT_MONTHS)[0]);
+  const [settings,setSettings]=useState(()=>{
+    try{const s=localStorage.getItem(SETTINGS_KEY);return s?JSON.parse(s):INIT_SETTINGS;}catch{return INIT_SETTINGS;}
+  });
+  const [allMonths,setAllMonths]=useState(()=>{
+    try{const d=localStorage.getItem(DATA_KEY);return d?JSON.parse(d):INIT_MONTHS;}catch{return INIT_MONTHS;}
+  });
+  const [currentMonth,setCurrentMonth]=useState(()=>{
+    try{
+      const d=localStorage.getItem(DATA_KEY);
+      const months=d?JSON.parse(d):INIT_MONTHS;
+      const saved=localStorage.getItem(MONTH_KEY);
+      return saved&&months[saved]?saved:Object.keys(months)[0];
+    }catch{return Object.keys(INIT_MONTHS)[0];}
+  });
+
+  useEffect(()=>{localStorage.setItem(DATA_KEY,JSON.stringify(allMonths));},[allMonths]);
+  useEffect(()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));},[settings]);
+  useEffect(()=>{localStorage.setItem(MONTH_KEY,currentMonth);},[currentMonth]);
   const [tab,setTab]=useState("overview");
   const [modal,setModal]=useState(null);
   const [bioAvailable,setBioAvailable]=useState(false);
