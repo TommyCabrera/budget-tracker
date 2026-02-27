@@ -15,8 +15,10 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const PIN_KEY = "bt_pin_hash";
 const BIO_KEY = "bt_bio_enabled";
 const DATA_KEY = "bt_all_months";
-const SETTINGS_KEY = "bt_settings";
 const MONTH_KEY = "bt_current_month";
+const SETTINGS_KEY = "bt_settings";
+const API_KEY_KEY = "bt_api_key";
+const GEMINI_MODEL_KEY = "bt_gemini_model";
 
 const today = () => new Date().toISOString().slice(0,10);
 const fmt = n => `₱${Number(n||0).toLocaleString("en-PH",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
@@ -28,10 +30,17 @@ const hashPin = async pin => {
 
 const MASTER_BILLS = [];
 const makeBills = masters => masters.map(b=>({...b,id:uid(),paid:false,amountPaid:0,datePaid:today(),paidFromActual:b.paidFrom}));
-const INIT_MONTHS = {
-  [`${MONTHS[new Date().getMonth()]} ${new Date().getFullYear()}`]:{income:[],bills:[],cards:[],expenses:[],masterBills:[]},
-};
+
+const defaultMonthKey = `${MONTHS[new Date().getMonth()]} ${new Date().getFullYear()}`;
+const INIT_MONTHS = { [defaultMonthKey]:{income:[],bills:[],cards:[],expenses:[],masterBills:[]} };
 const INIT_SETTINGS = {categories:DEFAULT_CATEGORIES,incomeSources:DEFAULT_INCOME_SOURCES,paymentMethods:DEFAULT_PAYMENT_METHODS};
+
+// ── localStorage helpers ──
+const loadJSON = (key, fallback) => {
+  try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; }
+  catch { return fallback; }
+};
+const saveJSON = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
 
 // ── Shared UI ──
 function Badge({cat}){
@@ -55,7 +64,18 @@ function Modal({title,onClose,children}){
 function Field({label,children}){
   return <div><label className="text-xs text-gray-500 mb-1 block font-medium">{label}</label>{children}</div>;
 }
+function Select({value,onChange,children,disabled}){
+  return(
+    <div className="relative">
+      <select className={selectCls} value={value} onChange={onChange} disabled={disabled}>{children}</select>
+      <div className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+  );
+}
 const inputCls = "w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white";
+const selectCls = "w-full border border-gray-200 rounded-xl pl-3 pr-10 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-white appearance-none";
 
 const IconEdit = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -344,7 +364,7 @@ function PaymentModal({title,defaultAmount,defaultSource,onSave,onClose,incomeSo
       <div className="space-y-3">
         <Field label="Amount Paid"><input type="number" className={inputCls} value={f.amount} onChange={e=>set("amount",e.target.value)} placeholder="0"/></Field>
         <Field label="Date Paid"><input type="date" className={inputCls} value={f.date} onChange={e=>set("date",e.target.value)}/></Field>
-        <Field label="Paid From"><select className={inputCls} value={f.source} onChange={e=>set("source",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</select></Field>
+        <Field label="Paid From"><Select value={f.source} onChange={e=>set("source",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</Select></Field>
         <button onClick={()=>{onSave({amount:parseFloat(f.amount)||0,date:f.date,source:f.source});onClose();}} className="w-full bg-orange-500 text-white py-2.5 rounded-xl font-medium hover:bg-orange-600 transition-colors">Confirm Payment</button>
       </div>
     </Modal>
@@ -392,12 +412,12 @@ function BillForm({initial,onSave,onClose,categories,incomeSources}){
     <div className="space-y-3">
       <Field label="Bill Name"><input className={inputCls} value={f.payment} onChange={e=>set("payment",e.target.value)} placeholder="e.g. Netflix"/></Field>
       <Field label="Description"><input className={inputCls} value={f.description} onChange={e=>set("description",e.target.value)} placeholder="Optional"/></Field>
-      <Field label="Category"><select className={inputCls} value={f.category} onChange={e=>set("category",e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</select></Field>
+      <Field label="Category"><Select value={f.category} onChange={e=>set("category",e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</Select></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Monthly Amount"><input type="number" className={inputCls} value={f.monthly} onChange={e=>set("monthly",e.target.value)} placeholder="0"/></Field>
         <Field label="Due / Payroll Date"><input className={inputCls} value={f.payrollDate} onChange={e=>set("payrollDate",e.target.value)} placeholder="e.g. 25"/></Field>
       </div>
-      <Field label="Default Pay From"><select className={inputCls} value={f.paidFrom} onChange={e=>set("paidFrom",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</select></Field>
+      <Field label="Default Pay From"><Select value={f.paidFrom} onChange={e=>set("paidFrom",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</Select></Field>
       <button onClick={submit} className="w-full bg-orange-500 text-white py-2.5 rounded-xl font-medium hover:bg-orange-600">{initial?"Update Bill":"Add Bill"}</button>
     </div>
   );
@@ -410,7 +430,7 @@ function IncomeForm({initial,onSave,onClose,incomeSources}){
   const submit=()=>{if(!f.amount)return;onSave({...f,amount:parseFloat(f.amount)||0,id:f.id||uid()});onClose();};
   return(
     <div className="space-y-3">
-      <Field label="Income Source"><select className={inputCls} value={f.source} onChange={e=>set("source",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</select></Field>
+      <Field label="Income Source"><Select value={f.source} onChange={e=>set("source",e.target.value)}>{incomeSources.map(s=><option key={s}>{s}</option>)}</Select></Field>
       <Field label="Description"><input className={inputCls} value={f.description} onChange={e=>set("description",e.target.value)} placeholder="e.g. via Wise"/></Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Date Received"><input type="date" className={inputCls} value={f.received} onChange={e=>set("received",e.target.value)}/></Field>
@@ -430,8 +450,8 @@ function ExpenseForm({initial,onClose,onSave,categories,paymentMethods}){
     <Modal title={initial?"Edit Expense":"Add Expense"} onClose={onClose}>
       <div className="space-y-3">
         <Field label="Expense Name"><input className={inputCls} value={f.expense} onChange={e=>set("expense",e.target.value)} placeholder="e.g. SM Grocery"/></Field>
-        <Field label="Category"><select className={inputCls} value={f.category} onChange={e=>set("category",e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</select></Field>
-        <Field label="Paid From"><select className={inputCls} value={f.paidFrom||""} onChange={e=>set("paidFrom",e.target.value)}>{paymentMethods.map(s=><option key={s}>{s}</option>)}</select></Field>
+        <Field label="Category"><Select value={f.category} onChange={e=>set("category",e.target.value)}>{categories.map(c=><option key={c}>{c}</option>)}</Select></Field>
+        <Field label="Paid From"><Select value={f.paidFrom||""} onChange={e=>set("paidFrom",e.target.value)}>{paymentMethods.map(s=><option key={s}>{s}</option>)}</Select></Field>
         <Field label="Notes"><input className={inputCls} value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Optional"/></Field>
         <div className="grid grid-cols-2 gap-3">
           <Field label="Date"><input type="date" className={inputCls} value={f.date||""} onChange={e=>set("date",e.target.value)}/></Field>
@@ -487,6 +507,8 @@ function AIModal({type,onClose,onResult}){
     r.readAsDataURL(f);
   };
   const analyze=async()=>{
+    const apiKey=localStorage.getItem(API_KEY_KEY);
+    if(!apiKey){setError("No API key set. Add your Gemini API key in Settings → AI Features.");return;}
     if(!imgData){setError("Please upload an image first.");return;}
     setLoading(true);setError("");setResult(null);
     try{
@@ -495,34 +517,104 @@ function AIModal({type,onClose,onResult}){
       const prompt=isReceipt
         ?`Look at this receipt image carefully. Extract the store/merchant name and the total amount paid. Return ONLY a valid JSON array with one object, no markdown:\n[{"expense":"store name","category":"Grocery","notes":"","date":"","amount":0}]\nCategories: Housing,Grocery,Utilities,Entertainment/Shopping,Healthcare,Insurance/Savings/Retirement,Debt,Vacation,Investment,Subscription,Other`
         :`Look at this credit card statement image carefully. Find and extract:\n1. The credit card or bank name\n2. The outstanding/current balance\n3. The minimum amount due\n4. The total amount due or statement balance\n5. The payment due date\nReturn ONLY a valid JSON object, no markdown:\n{"name":"Card Name","remaining":0,"due":"due date","amountDue":0,"minimumDue":0}\nNumbers only, no currency symbols or commas.`;
-      const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:1024,
-          messages:[{role:"user",content:[{type:"image",source:{type:"base64",media_type:mimeType,data:imgData}},{type:"text",text:prompt}]}]})});
+      const model=localStorage.getItem(GEMINI_MODEL_KEY)||"gemini-1.5-flash";
+      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({contents:[{parts:[{inline_data:{mime_type:mimeType,data:imgData}},{text:prompt}]}]})});
       const data=await resp.json();
       if(data.error){setError(`API error: ${data.error.message}`);setLoading(false);return;}
-      const text=data.content?.find(c=>c.type==="text")?.text||"";
+      const text=data.candidates?.[0]?.content?.parts?.[0]?.text||"";
       setRawText(text);
       const cleaned=text.replace(/```json|```/g,"").trim();
       const start=cleaned.search(/[\[{]/);
       const end=Math.max(cleaned.lastIndexOf("}"),cleaned.lastIndexOf("]"));
-      if(start===-1||end===-1)throw new Error("No JSON");
+      if(start===-1||end===-1)throw new Error("No JSON found in response");
       setResult(JSON.parse(cleaned.slice(start,end+1)));
-    }catch(e){setError("Could not parse response. See raw text below.");}
+    }catch(e){setError(`Error: ${e.message}`);}
     setLoading(false);
   };
   return(
-    <Modal title={type==="receipt"?"Scan Receipt":"Upload CC Statement"} onClose={onClose}>
-      <div className="space-y-4">
-        <div onClick={()=>fileRef.current.click()} className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center cursor-pointer hover:border-orange-400 transition-colors">
+    <Modal title={type==="receipt"?"Scan Receipt":"Upload CC Statement"} onClose={loading?()=>{}:onClose}>
+      <div className="relative space-y-4">
+        {loading&&(
+          <div className="absolute inset-0 z-20 bg-white/90 rounded-xl flex flex-col items-center justify-center gap-4">
+            <div className="relative w-16 h-16">
+              <div className="w-16 h-16 border-4 border-orange-100 rounded-full"/>
+              <div className="w-16 h-16 border-4 border-orange-500 border-t-transparent rounded-full animate-spin absolute inset-0"/>
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-semibold text-gray-800">Analyzing image...</p>
+              <p className="text-xs text-gray-400 mt-0.5">This may take a few seconds</p>
+            </div>
+          </div>
+        )}
+        <div onClick={()=>!loading&&fileRef.current.click()} className={`border-2 border-dashed rounded-xl p-6 text-center transition-colors ${loading?"border-gray-100 cursor-not-allowed":"border-gray-200 cursor-pointer hover:border-orange-400"}`}>
           {preview?<img src={preview} className="max-h-48 mx-auto rounded-lg object-contain"/>:<div className="text-gray-400"><div className="text-4xl mb-2">{type==="receipt"?"🧾":"💳"}</div><p className="text-sm">Tap to upload {type==="receipt"?"receipt photo":"statement image"}</p></div>}
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile}/>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} disabled={loading}/>
         </div>
         {error&&<div className="space-y-2"><p className="text-red-500 text-sm">{error}</p>{rawText&&<div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-600"><p className="font-semibold mb-1">Raw response:</p><pre className="whitespace-pre-wrap overflow-auto max-h-36">{rawText}</pre></div>}</div>}
         {result&&<div className="bg-green-50 border border-green-200 rounded-xl p-3 text-xs text-green-700"><p className="font-semibold mb-1">Extracted:</p><pre className="whitespace-pre-wrap overflow-auto">{JSON.stringify(result,null,2)}</pre></div>}
         <div className="flex gap-3">
-          <button onClick={analyze} disabled={loading||!imgData} className="flex-1 bg-orange-500 text-white py-2.5 rounded-xl font-medium disabled:opacity-50 hover:bg-orange-600">{loading?"Analyzing...":"Analyze"}</button>
-          {result&&<button onClick={()=>{onResult(result);onClose();}} className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-medium">Add to Tracker</button>}
+          <button onClick={analyze} disabled={loading||!imgData} className="flex-1 bg-orange-500 text-white py-2.5 rounded-xl font-medium disabled:opacity-50 hover:bg-orange-600">Analyze</button>
+          {result&&<button onClick={()=>{onResult(result);onClose();}} disabled={loading} className="flex-1 bg-gray-900 text-white py-2.5 rounded-xl font-medium disabled:opacity-50">Add to Tracker</button>}
         </div>
+      </div>
+    </Modal>
+  );
+}
+
+function APIKeyModal({onClose}){
+  const [key,setKey]=useState(localStorage.getItem(API_KEY_KEY)||"");
+  const [models,setModels]=useState([]);
+  const [selectedModel,setSelectedModel]=useState(localStorage.getItem(GEMINI_MODEL_KEY)||"");
+  const [detecting,setDetecting]=useState(false);
+  const [detectError,setDetectError]=useState("");
+  const hasKey=!!localStorage.getItem(API_KEY_KEY);
+
+  const detectModels=async()=>{
+    if(!key.trim()){setDetectError("Enter your API key first.");return;}
+    setDetecting(true);setDetectError("");setModels([]);
+    try{
+      const resp=await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key.trim()}`);
+      const data=await resp.json();
+      if(data.error){setDetectError(`Error: ${data.error.message}`);setDetecting(false);return;}
+      const vision=data.models?.filter(m=>m.supportedGenerationMethods?.includes("generateContent")&&(m.name.includes("flash")||m.name.includes("vision")||m.name.includes("pro")))
+        .map(m=>m.name.replace("models/",""))||[];
+      setModels(vision);
+      if(vision.length>0)setSelectedModel(vision[0]);
+      else setDetectError("No compatible models found for your key.");
+    }catch(e){setDetectError(`Request failed: ${e.message}`);}
+    setDetecting(false);
+  };
+
+  const save=()=>{
+    localStorage.setItem(API_KEY_KEY,key.trim());
+    if(selectedModel)localStorage.setItem(GEMINI_MODEL_KEY,selectedModel);
+    onClose();
+  };
+
+  return(
+    <Modal title="Gemini API Key" onClose={onClose}>
+      <div className="space-y-3">
+        <p className="text-xs text-gray-500">Free to use. Get your key at <span className="text-orange-500 font-medium">aistudio.google.com</span>. Stored locally on this device only.</p>
+        <Field label="API Key">
+          <input className={inputCls} value={key} onChange={e=>{setKey(e.target.value);setModels([]);setSelectedModel("");}} placeholder="AIza..." type="password"/>
+        </Field>
+        <button onClick={detectModels} disabled={detecting||!key.trim()} className="w-full border border-orange-400 text-orange-500 py-2 rounded-xl text-sm font-medium disabled:opacity-40 hover:bg-orange-50">
+          {detecting?"Detecting...":"🔍 Detect Available Models"}
+        </button>
+        {detectError&&<p className="text-red-500 text-xs">{detectError}</p>}
+        {models.length>0&&(
+          <Field label="Select Model">
+            <Select value={selectedModel} onChange={e=>setSelectedModel(e.target.value)}>
+              {models.map(m=><option key={m} value={m}>{m}</option>)}
+            </Select>
+          </Field>
+        )}
+        {selectedModel&&<p className="text-xs text-green-600 font-medium">✓ Will use: {selectedModel}</p>}
+        <button onClick={save} disabled={!key.trim()} className="w-full bg-orange-500 text-white py-2.5 rounded-xl font-medium disabled:opacity-40 hover:bg-orange-600">Save Key</button>
+        {hasKey&&<button onClick={()=>{localStorage.removeItem(API_KEY_KEY);localStorage.removeItem(GEMINI_MODEL_KEY);setKey("");setModels([]);setSelectedModel("");onClose();}} className="w-full text-red-400 text-sm py-1">Remove Key</button>}
       </div>
     </Modal>
   );
@@ -530,7 +622,7 @@ function AIModal({type,onClose,onResult}){
 
 function NewMonthModal({existingMonths,onClose,onCreate}){
   const [sel,setSel]=useState("");
-  const [year,setYear]=useState("2026");
+  const [year,setYear]=useState(String(new Date().getFullYear()));
   const monthKey=sel&&year?`${sel} ${year}`:"";
   const exists=existingMonths.includes(monthKey);
   return(
@@ -538,7 +630,7 @@ function NewMonthModal({existingMonths,onClose,onCreate}){
       <div className="space-y-4">
         <p className="text-sm text-gray-500">Your recurring bills will be carried over, expenses and payments reset to zero.</p>
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Month"><select className={inputCls} value={sel} onChange={e=>setSel(e.target.value)}><option value="">Select...</option>{MONTHS.map(m=><option key={m}>{m}</option>)}</select></Field>
+          <Field label="Month"><Select value={sel} onChange={e=>setSel(e.target.value)}><option value="">Select...</option>{MONTHS.map(m=><option key={m}>{m}</option>)}</Select></Field>
           <Field label="Year"><input className={inputCls} value={year} onChange={e=>setYear(e.target.value)} placeholder="2026"/></Field>
         </div>
         {exists&&<p className="text-red-500 text-xs">Month already exists.</p>}
@@ -553,24 +645,21 @@ function NewMonthModal({existingMonths,onClose,onCreate}){
 // ══════════════════════════════════════
 export default function App(){
   const [unlocked,setUnlocked]=useState(false);
-  const [settings,setSettings]=useState(()=>{
-    try{const s=localStorage.getItem(SETTINGS_KEY);return s?JSON.parse(s):INIT_SETTINGS;}catch{return INIT_SETTINGS;}
-  });
-  const [allMonths,setAllMonths]=useState(()=>{
-    try{const d=localStorage.getItem(DATA_KEY);return d?JSON.parse(d):INIT_MONTHS;}catch{return INIT_MONTHS;}
-  });
+
+  // ── Load persisted state on mount ──
+  const [settings,setSettings]=useState(()=>loadJSON(SETTINGS_KEY,INIT_SETTINGS));
+  const [allMonths,setAllMonths]=useState(()=>loadJSON(DATA_KEY,INIT_MONTHS));
   const [currentMonth,setCurrentMonth]=useState(()=>{
-    try{
-      const d=localStorage.getItem(DATA_KEY);
-      const months=d?JSON.parse(d):INIT_MONTHS;
-      const saved=localStorage.getItem(MONTH_KEY);
-      return saved&&months[saved]?saved:Object.keys(months)[0];
-    }catch{return Object.keys(INIT_MONTHS)[0];}
+    const saved=localStorage.getItem(MONTH_KEY);
+    const months=loadJSON(DATA_KEY,INIT_MONTHS);
+    return (saved&&months[saved])?saved:Object.keys(months)[0]||defaultMonthKey;
   });
 
-  useEffect(()=>{localStorage.setItem(DATA_KEY,JSON.stringify(allMonths));},[allMonths]);
-  useEffect(()=>{localStorage.setItem(SETTINGS_KEY,JSON.stringify(settings));},[settings]);
-  useEffect(()=>{localStorage.setItem(MONTH_KEY,currentMonth);},[currentMonth]);
+  // ── Persist on every change ──
+  useEffect(()=>{ saveJSON(DATA_KEY,allMonths); },[allMonths]);
+  useEffect(()=>{ saveJSON(SETTINGS_KEY,settings); },[settings]);
+  useEffect(()=>{ localStorage.setItem(MONTH_KEY,currentMonth); },[currentMonth]);
+
   const [tab,setTab]=useState("overview");
   const [modal,setModal]=useState(null);
   const [bioAvailable,setBioAvailable]=useState(false);
@@ -583,7 +672,7 @@ export default function App(){
 
   if(!unlocked)return <LockScreen onUnlock={()=>setUnlocked(true)}/>;
 
-  const M=allMonths[currentMonth];
+  const M=allMonths[currentMonth]||{income:[],bills:[],cards:[],expenses:[],masterBills:[]};
   const {income,bills,cards,expenses}=M;
   const openModal=m=>setModal(m);
   const closeModal=()=>setModal(null);
@@ -606,7 +695,7 @@ export default function App(){
   const addCC=c=>updateMonth("cards",[...cards,c]);
   const saveCC=item=>updateMonth("cards",cards.map(x=>x.id===item.id?item:x));
   const deleteCC=id=>updateMonth("cards",cards.filter(x=>x.id!==id));
-  const markCCPaid=(card,payInfo)=>updateMonth("cards",cards.map(x=>x.id===card.id?{...x,paid:true,amountPaid:payInfo.amount,datePaid:payInfo.date,paidFrom:payInfo.source}:x));
+  const markCCPaid=(card,payInfo)=>updateMonth("cards",cards.map(x=>x.id===card.id?{...x,paid:true,amountPaid:payInfo.amount,datePaid:payInfo.date,paidFrom:payInfo.source,remaining:Math.max(0,x.remaining-payInfo.amount)}:x));
   const unmarkCCPaid=id=>updateMonth("cards",cards.map(x=>x.id===id?{...x,paid:false,amountPaid:0,datePaid:today()}:x));
 
   const addExpense=e=>updateMonth("expenses",[...expenses,e]);
@@ -670,7 +759,6 @@ export default function App(){
       {/* Content */}
       <div className="px-4 pb-28 pt-4 space-y-4">
 
-        {/* OVERVIEW */}
         {tab==="overview"&&(
           <>
             <div className="bg-white border border-gray-100 rounded-2xl">
@@ -754,7 +842,6 @@ export default function App(){
           </>
         )}
 
-        {/* BILLS */}
         {tab==="bills"&&(
           <>
             <div className="flex items-center justify-between">
@@ -804,7 +891,6 @@ export default function App(){
           </>
         )}
 
-        {/* CARDS */}
         {tab==="cards"&&(
           <>
             <div className="flex items-center justify-between">
@@ -858,7 +944,6 @@ export default function App(){
           </>
         )}
 
-        {/* EXPENSES */}
         {tab==="expenses"&&(
           <>
             <div className="flex items-center justify-between">
@@ -898,7 +983,6 @@ export default function App(){
           </>
         )}
 
-        {/* SETTINGS */}
         {tab==="settings"&&(
           <>
             <p style={{fontFamily:"'Instrument Serif',serif"}} className="text-xl text-gray-800">Settings</p>
@@ -933,6 +1017,13 @@ export default function App(){
                   <span className="text-gray-300">›</span>
                 </button>
               ))}
+            </div>
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-50">
+              <div className="px-4 py-3"><p className="text-xs text-gray-400 font-medium uppercase tracking-wide">AI Features</p></div>
+              <button onClick={()=>openModal("apiKey")} className="w-full flex items-center justify-between px-4 py-4 hover:bg-gray-50">
+                <div className="flex items-center gap-3"><span className="text-xl">🤖</span><div className="text-left"><p className="text-sm font-medium text-gray-800">Gemini API Key</p><p className="text-xs text-gray-400">{localStorage.getItem(API_KEY_KEY)?"Key saved ✓":"Required for scanning features (free)"}</p></div></div>
+                <span className="text-gray-300">›</span>
+              </button>
             </div>
             <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden divide-y divide-gray-50">
               <div className="px-4 py-3"><p className="text-xs text-gray-400 font-medium uppercase tracking-wide">Data</p></div>
@@ -982,6 +1073,7 @@ export default function App(){
       {modal==="scan"&&<AIModal type="receipt" onClose={closeModal} onResult={r=>{const items=Array.isArray(r)?r:[r];items.forEach(i=>addExpense({...i,id:uid()}));}}/>}
       {modal==="ccScan"&&<AIModal type="statement" onClose={closeModal} onResult={r=>addCC({...r,id:uid(),paid:false,amountPaid:0,datePaid:today(),paidFrom:""})}/>}
 
+      {modal==="apiKey"&&<APIKeyModal onClose={closeModal}/>}
       {modal==="changePin"&&<ChangePinModal onClose={closeModal}/>}
       {modal==="bioSetup"&&<BiometricSetup onDone={ok=>{setBioEnabled(ok);closeModal();}}/>}
       {modal==="resetPin"&&<ConfirmDelete label="your PIN (you will set a new one on next open)" onConfirm={()=>{localStorage.removeItem(PIN_KEY);localStorage.removeItem(BIO_KEY);setUnlocked(false);}} onClose={closeModal}/>}

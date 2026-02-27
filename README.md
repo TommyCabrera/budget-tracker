@@ -59,12 +59,43 @@ Record your day-to-day spending.
 - **Biometric Unlock** — enable fingerprint or face ID (if your device supports it)
 - **Lock App** — return to the PIN screen
 - **Customize Lists** — edit the categories, income sources, and payment methods to match your own setup
+- **Gemini API Key** — required for receipt scanning and CC statement upload (see below)
 - **Reset PIN** — clears your PIN so you can set a new one
 
 ---
 
 ### Switching Between Months
 At the top of the screen you'll see the current month. Tap **+ New Month** to start a new month — your recurring bills will automatically carry over, and expenses/payments will reset to zero.
+
+---
+
+## Setting Up Receipt & Statement Scanning
+
+The app can automatically read receipts and credit card statements from photos using Google's free AI (Gemini). To enable this, you need a free API key — think of it as a password that lets the app talk to Google's AI on your behalf.
+
+**Don't worry, it's free and takes less than 2 minutes to set up.**
+
+### Step 1 — Get your free API key
+
+1. Go to **[aistudio.google.com](https://aistudio.google.com)**
+2. Sign in with your **Google account** (the same one you use for Gmail)
+3. Click **"Get API key"** in the left sidebar
+4. Click **"Create API key"**
+5. Copy the key that appears — it will look something like `AIzaSy...`
+
+> Your key is free and gives you up to **1,500 scans per day** — more than enough for personal use.
+
+### Step 2 — Add the key to the app
+
+1. Open the app and go to **Settings** (⚙️ tab)
+2. Tap **Gemini API Key** under the AI Features section
+3. Paste your key into the field
+4. Tap **🔍 Detect Available Models** — this checks which AI models are available for your account and picks the best one automatically
+5. Tap **Save Key**
+
+That's it! You can now use **Scan Receipt** in the Expenses tab and **Upload Statement of Account** in the Cards tab.
+
+> **Your key is stored only on your device** — it never leaves your phone or browser. You may need to re-enter it if you clear your browser data.
 
 ---
 
